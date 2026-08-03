@@ -206,7 +206,7 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     style_bold = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=13)
     
     story = []
-    story.append(Paragraph(pdf_text("AGB HIDROLIK & MAKINA SAN. TIC. A.S."), style_title))
+    story.append(Paragraph(pdf_text("MAXİMA MAKİNA"), style_title))
     story.append(Paragraph(pdf_text(f"SEVK IRSALIYESI - No: {evrak_no}"), style_title))
     story.append(Spacer(1, 10))
     
@@ -273,7 +273,7 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
 # --- GERÇEK SMTP MAİL GÖNDERİCİ ---
 def mail_gonder(alici_mail, evrak_no, firma, pdf_yolu, smtp_user, smtp_pass):
     msg = EmailMessage()
-    msg["Subject"] = f"AGB Hidrolik - Sevk İrsaliyesi ({evrak_no})"
+    msg["Subject"] = f"MAXİMA MAKİNE - Sevk İrsaliyesi ({evrak_no})"
     msg["From"] = smtp_user
     msg["To"] = alici_mail
     msg.set_content(f"Sayın {firma} Yetkilisi,\n\n{evrak_no} seri numaralı sevk irsaliyemize ait resmi evrak ekte PDF olarak sunulmuştur.\n\nMalların eksiksiz teslim alınmasını rica eder, iyi çalışmalar dileriz.\nAGB Hidrolik ve Makina San. Tic. A.Ş.")
@@ -293,11 +293,11 @@ if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
 
 st.sidebar.divider()
 menu = st.sidebar.radio("📌 Menü Seçimi", [
-    "📊 Dashboard & Simülasyon",
+    "📊 Dashboard",
     "📦 Stoklar (Manuel Kontrol)",
     "📑 Reçeteler (BOM)",
     "🏭 Mamüller (Üretim Arşivi)",
-    "⚠️ Eksik Stoklar (Darboğaz)",
+    "⚠️ Eksik Stoklar",
     "🚚 Sevkiyat & İrsaliye"
 ])
 
@@ -419,28 +419,28 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🏢 Düzenleyen (Bizim Firma)")
-        s_unvan = st.text_input("Satıcı Ünvanı", "AGB HİDROLİK VE MAKİNA SAN. TİC. A.Ş.")
+        s_unvan = st.text_input("Satıcı Ünvanı", "")
         s_adres = st.text_area("Satıcı Adresi", "Organize Sanayi Bölgesi 2. Cadde No:14 Aydın / Türkiye", height=68)
         s_vd = st.text_input("Vergi Dairesi / No", "Aydın V.D. - 0123456789")
     with c2:
         st.subheader("🏬 Alıcı (Müşteri Firma)")
-        a_unvan = st.text_input("Alıcı Firma Ünvanı", "ÇUKUROVA TARIM MAKİNALARI LTD. ŞTİ.")
-        a_adres = st.text_area("Alıcı Sevk Adresi", "Sanayi Sitesi 4. Blok No:89 Seyhan / Adana", height=68)
-        a_vd = st.text_input("Alıcı V.D. / No", "Seyhan V.D. - 9876543210")
-        a_mail = st.text_input("Alıcı E-Posta Adresi", "satinalma@cukurova.com")
+        a_unvan = st.text_input("Alıcı Firma Ünvanı", "")
+        a_adres = st.text_area("Alıcı Sevk Adresi", "", height=68)
+        a_vd = st.text_input("Alıcı V.D. / No", "")
+        a_mail = st.text_input("Alıcı E-Posta Adresi", "")
 
     st.markdown("---")
     
     st.subheader("🚛 Taşıma & Evrak Detayları")
     c3, c4, c5, c6 = st.columns(4)
     with c3:
-        evrak_no = st.text_input("İrsaliye Seri / Sıra No", "AGB-2026-0001")
+        evrak_no = st.text_input("İrsaliye Seri / Sıra No", "")
     with c4:
         fiili_sevk = st.text_input("Fiili Sevk Tarihi & Saati", datetime.datetime.now().strftime("%d.%m.%Y - %H:30"))
     with c5:
-        plaka = st.text_input("Taşıyıcı Araç Plakası", "09 AGB 456")
+        plaka = st.text_input("Taşıyıcı Araç Plakası", "")
     with c6:
-        sofor = st.text_input("Şoför Adı Soyadı", "Ahmet Yılmaz")
+        sofor = st.text_input("Şoför Adı Soyadı", "")
 
     st.markdown("---")
     
@@ -475,7 +475,7 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
         st.markdown("---")
         
         with st.expander("📧 E-Posta SMTP Gönderici Ayarları (Gerçek Mail Atmak İçin)"):
-            smtp_user = st.text_input("Gönderici Gmail Adresi", "seninmailin@gmail.com")
+            smtp_user = st.text_input("Gönderici Gmail Adresi", "")
             smtp_pass = st.text_input("Gmail Uygulama Şifresi (App Password)", type="password")
             mail_aktif = st.checkbox("İrsaliye Onaylandığında Müşteriye E-Posta Gönder", value=False)
 
