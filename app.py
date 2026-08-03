@@ -17,9 +17,32 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 # --- SAYFA VE SEKME AYARLARI ---
 st.set_page_config(page_title="AGB Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
 
+# --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ (EN KRİTİK KISIM!) ---
+def sayiya_cevir(val):
+    """
+    Excel'den veya elle girilen Türkçe virgüllü sayıları (Örn: '0,164' veya '1,33')
+    binlik hatası yapmadan güvenle gerçek ondalık sayıya (float) çevirir.
+    """
+    if pd.isna(val) or val == "" or val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    
+    val_str = str(val).strip().replace(" ", "")
+    # Hem binlik noktası hem virgül varsa (Örn: 1.234,56)
+    if "." in val_str and "," in val_str:
+        val_str = val_str.replace(".", "").replace(",", ".")
+    else:
+        # Sadece virgül varsa (Örn: 0,164 -> 0.164)
+        val_str = val_str.replace(",", ".")
+    
+    try:
+        return float(val_str)
+    except:
+        return 0.0
+
 # --- STREAMLIT CLOUD PDF HARF KORUMASI ---
 def pdf_text(metin):
-    """Linux bulut sunucularda standart Helvetica fontunda Türkçe harf çakışmasını engeller."""
     if not isinstance(metin, str):
         metin = str(metin)
     degisim = {
@@ -30,7 +53,7 @@ def pdf_text(metin):
         metin = metin.replace(tr, en)
     return metin
 
-# --- 1. OTURUM VE HAFIZA YÖNETİMİ ---
+# --- 2. OTURUM VE HAFIZA YÖNETİMİ ---
 if "giriş_yapildi" not in st.session_state:
     st.session_state["giriş_yapildi"] = False
 
@@ -54,13 +77,15 @@ if "stok_df" not in st.session_state:
         {"Stok Kod": "1.ATD.20.46.Ç", "Stok Adı": "ATD ÜÇ NOKTA ASKI KOMPLE", "Depo Miktar": 15.0, "Birim": "ADET"},
         {"Stok Kod": "1.AGB.100.04.000.0", "Stok Adı": "AGB DİNGİL PİSTONU KOMPLE", "Depo Miktar": 8.0, "Birim": "ADET"},
         {"Stok Kod": "2.ATD.000.01.000.0", "Stok Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Depo Miktar": 2.0, "Birim": "ADET"},
-        {"Stok Kod": "7.1.3.1001", "Stok Adı": "LAMA 40 X 10 HAMMADDE", "Depo Miktar": 50.0, "Birim": "METRE"}
+        {"Stok Kod": "7.1.3.1001", "Stok Adı": "LAMA 40 X 10 HAMMADDE", "Depo Miktar": 50.0, "Birim": "METRE"},
+        {"Stok Kod": "7.1.7.1076", "Stok Adı": "BORU DİKİŞLİ Ø88,9(3'')x2", "Depo Miktar": 100.0, "Birim": "METRE"}
     ])
 
 if "recete_df" not in st.session_state:
     st.session_state["recete_df"] = pd.DataFrame([
-        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "1.ATD.20.46.Ç", "Malzeme Kodu": "2.ATD.000.01.000.0", "Malzeme Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Miktar": 1.0, "Seviye": 1, "Path": "1.ATD...>2.ATD..."},
-        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.3.1001", "Malzeme Adı": "LAMA 40 X 10 HAMMADDE", "Miktar": 4.0, "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.3..."}
+        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "1.ATD.20.46.Ç", "Malzeme Kodu": "2.ATD.000.01.000.0", "Malzeme Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Miktar": "1", "Seviye": 1, "Path": "1.ATD...>2.ATD..."},
+        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.3.1001", "Malzeme Adı": "LAMA 40 X 10 HAMMADDE", "Miktar": "4", "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.3..."},
+        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.7.1076", "Malzeme Adı": "BORU DİKİŞLİ Ø88,9(3'')x2", "Miktar": "0,164", "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.7..."}
     ])
 
 if "mamuller_df" not in st.session_state:
@@ -81,7 +106,9 @@ def uretimi_simule_et(mamul_kod, parent_kod, miktar, seviye, islem_kaynagi, ust_
     for _, row in children.iterrows():
         child_kod = str(row["Malzeme Kodu"]).strip()
         child_ad = str(row["Malzeme Adı"]).strip()
-        birim_miktar = float(row["Miktar"])
+        
+        # VİRGÜL HATASINI ÇÖZEN NOKTA: sayiya_cevir fonksiyonu kullanıldı
+        birim_miktar = sayiya_cevir(row["Miktar"])
         path_bilgisi = str(row["Path"]).strip()
         
         gereksinim = round(miktar * birim_miktar, 4)
@@ -141,18 +168,15 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     
     styles = getSampleStyleSheet()
     style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor("#1A365D"), alignment=TA_CENTER, spaceAfter=15)
-    style_sub = ParagraphStyle('SubStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor("#333333"))
     style_normal = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=13)
     style_bold = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=13)
     
     story = []
     
-    # 1. Üst Başlık
     story.append(Paragraph(pdf_text("AGB HIDROLIK & MAKINA SAN. TIC. A.S."), style_title))
     story.append(Paragraph(pdf_text(f"SEVK IRSALIYESI - No: {evrak_no}"), style_title))
     story.append(Spacer(1, 10))
     
-    # 2. Satıcı (Düzenleyen) & Alıcı (Müşteri) Tablosu (2 Kolonlu)
     satici_txt = (
         f"<b>DÜZENLEYEN (SATICICI):</b><br/>"
         f"{pdf_text(satici_bilgi['unvan'])}<br/>"
@@ -181,7 +205,6 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     story.append(t_fatura)
     story.append(Spacer(1, 12))
     
-    # 3. Sevk & Taşıma Detayları Barı
     detay_txt = (
         f"<b>Düzenleme Tarihi:</b> {sevk_detay['duzenleme_tarih']}   |   "
         f"<b>Fiili Sevk Tarihi & Saati:</b> {sevk_detay['fiili_sevk']}   |   "
@@ -199,7 +222,6 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     story.append(t_detay)
     story.append(Spacer(1, 15))
     
-    # 4. Sevk Edilen Ürün Kalemleri Tablosu
     tablo_veri = [
         [
             Paragraph("<b>Sıra</b>", style_bold),
@@ -233,7 +255,6 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     story.append(t_urunler)
     story.append(Spacer(1, 25))
     
-    # 5. Alt İmza ve Teslimat Alanı
     yasal_not = (
         "<i>İşbu sevk irsaliyesi muhteviyatı mallar yukarıda belirtilen miktar ve "
         "niteliklere uygun olarak eksiksiz ve hasarsız bir şekilde teslim edilmiştir/alınmıştır.</i>"
@@ -311,7 +332,8 @@ if menu == "📊 Dashboard & Simülasyon":
         hedef_adet = st.number_input("Hedef Adet", min_value=1.0, value=5.0, step=1.0)
         
     if st.button("▶ SİMÜLASYONU BAŞLAT VE REÇETEYİ PATLAT", type="primary", use_container_width=True):
-        stok_dict = dict(zip(st.session_state["stok_df"]["Stok Kod"], st.session_state["stok_df"]["Depo Miktar"]))
+        # Stokları da sayiya_cevir ile güvene aldık
+        stok_dict = {row["Stok Kod"]: sayiya_cevir(row["Depo Miktar"]) for _, row in st.session_state["stok_df"].iterrows()}
         ad_dict = dict(zip(st.session_state["stok_df"]["Stok Kod"], st.session_state["stok_df"]["Stok Adı"]))
         
         test_stok_dict = stok_dict.copy()
@@ -399,7 +421,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
     st.title("🚚 Resmi Sevk İrsaliyesi Düzenleme & Lojistik")
     st.markdown("---")
     
-    # --- A. SATICI VE ALICI FİRMA BİLGİLERİ ---
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🏢 Düzenleyen (Bizim Firma)")
@@ -415,7 +436,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
 
     st.markdown("---")
     
-    # --- B. SEVKİYAT VE TAŞIMA DETAYLARI ---
     st.subheader("🚛 Taşıma & Evrak Detayları")
     c3, c4, c5, c6 = st.columns(4)
     with c3:
@@ -429,7 +449,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
 
     st.markdown("---")
     
-    # --- C. İRSALİYE SEPETİNE KALEM EKLEME ---
     st.subheader("📦 İrsaliyeye Eklenecek Ürün Kalemleri")
     c7, c8, c9 = st.columns([2, 1, 1])
     with c7:
@@ -449,7 +468,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
             })
             st.success(f"{secilen_kod} irsaliye listesine eklendi!")
 
-    # Sepetteki Kalemleri Göster
     if len(st.session_state["irsaliye_sepeti"]) > 0:
         st.write("### 🛒 Hazırlanan İrsaliye Listesi")
         sepet_df = pd.DataFrame(st.session_state["irsaliye_sepeti"])
@@ -461,21 +479,18 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
 
         st.markdown("---")
         
-        # --- D. SMTP MAİL AYARLARI ---
         with st.expander("📧 E-Posta SMTP Gönderici Ayarları (Gerçek Mail Atmak İçin)"):
             smtp_user = st.text_input("Gönderici Gmail Adresi", "seninmailin@gmail.com")
             smtp_pass = st.text_input("Gmail Uygulama Şifresi (App Password)", type="password")
             mail_aktif = st.checkbox("İrsaliye Onaylandığında Müşteriye E-Posta Gönder", value=False)
 
-        # --- E. FİNAL BUTONU: KONTROL, STOK DÜŞME, PDF & MAİL ---
         if st.button("▶ RESMİ İRSALİYEYİ ONAYLA, STOKLARDAN DÜŞ VE SEVK ET", type="primary", use_container_width=True):
-            # 1. TÜM KALEMLER İÇİN TOPLU STOK KONTROLÜ
             yetersizler = []
             for item in st.session_state["irsaliye_sepeti"]:
                 m_row = st.session_state["stok_df"][st.session_state["stok_df"]["Stok Kod"] == item["kod"]]
-                if m_row.empty or float(m_row["Depo Miktar"].values[0]) < item["miktar"]:
-                    yetersiz_stok = m_row["Depo Miktar"].values[0] if not m_row.empty else 0
-                    yetersizler.append(f"• {item['kod']} ( İstenen: {item['miktar']} | Depoda: {yetersiz_stok} )")
+                mevcut_stok_val = sayiya_cevir(m_row["Depo Miktar"].values[0]) if not m_row.empty else 0.0
+                if m_row.empty or mevcut_stok_val < item["miktar"]:
+                    yetersizler.append(f"• {item['kod']} ( İstenen: {item['miktar']} | Depoda: {mevcut_stok_val} )")
             
             if len(yetersizler) > 0:
                 st.error("❌ HATA: Aşağıdaki ürünlerin depodaki stoku yetersiz! Hiçbir düşüm yapılmadı:")
@@ -483,10 +498,9 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
                     st.write(y)
                 st.stop()
             
-            # 2. STOKLARDAN KALICI DÜŞME & SEVK ARŞİVİNE KAYIT
             for item in st.session_state["irsaliye_sepeti"]:
                 idx = st.session_state["stok_df"][st.session_state["stok_df"]["Stok Kod"] == item["kod"]].index[0]
-                mevcut = float(st.session_state["stok_df"].at[idx, "Depo Miktar"])
+                mevcut = sayiya_cevir(st.session_state["stok_df"].at[idx, "Depo Miktar"])
                 st.session_state["stok_df"].at[idx, "Depo Miktar"] = round(mevcut - item["miktar"], 4)
                 
                 yeni_log = pd.DataFrame([{
@@ -499,7 +513,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
                 }])
                 st.session_state["sevk_log_df"] = pd.concat([st.session_state["sevk_log_df"], yeni_log], ignore_index=True)
 
-            # 3. REPORTLAB RESMİ İRSALİYE PDF'İ OLUŞTURMA
             satici_info = {"unvan": s_unvan, "adres": s_adres, "vd": s_vd}
             alici_info = {"unvan": a_unvan, "adres": a_adres, "vd": a_vd}
             detay_info = {
@@ -511,7 +524,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
             
             pdf_yolu = resmi_irsaliye_pdf_olustur(evrak_no, satici_info, alici_info, detay_info, st.session_state["irsaliye_sepeti"])
             
-            # 4. E-POSTA GÖNDERİMİ
             mail_msg = ""
             if mail_aktif and smtp_user and smtp_pass:
                 try:
@@ -522,7 +534,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
 
             st.success(f"✅ {evrak_no} irsaliyesi başarıyla kesildi ve tüm ürünler depodan düşüldü!{mail_msg}")
             
-            # 5. İNDİRME BUTONU
             with open(pdf_yolu, "rb") as f:
                 st.download_button(
                     label="📥 RESMİ SEVK İRSALİYESİ PDF'İNİ İNDİR",
@@ -531,7 +542,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
                     mime="application/pdf"
                 )
             
-            # Sepeti sıfırla
             st.session_state["irsaliye_sepeti"] = []
     else:
         st.info("💡 İrsaliye oluşturmak için yukarıdan ürün seçip 'İrsaliyeye Ekle' butonuna basınız.")
