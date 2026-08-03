@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import os
+import json
 import smtplib
 from email.message import EmailMessage
 
@@ -17,31 +18,23 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 # --- SAYFA VE SEKME AYARLARI ---
 st.set_page_config(page_title="AGB Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
 
-# --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ (EN KRİTİK KISIM!) ---
+# --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ ---
 def sayiya_cevir(val):
-    """
-    Excel'den veya elle girilen Türkçe virgüllü sayıları (Örn: '0,164' veya '1,33')
-    binlik hatası yapmadan güvenle gerçek ondalık sayıya (float) çevirir.
-    """
     if pd.isna(val) or val == "" or val is None:
         return 0.0
     if isinstance(val, (int, float)):
         return float(val)
-    
     val_str = str(val).strip().replace(" ", "")
-    # Hem binlik noktası hem virgül varsa (Örn: 1.234,56)
     if "." in val_str and "," in val_str:
         val_str = val_str.replace(".", "").replace(",", ".")
     else:
-        # Sadece virgül varsa (Örn: 0,164 -> 0.164)
         val_str = val_str.replace(",", ".")
-    
     try:
         return float(val_str)
     except:
         return 0.0
 
-# --- STREAMLIT CLOUD PDF HARF KORUMASI ---
+# --- 2. STREAMLIT CLOUD PDF HARF KORUMASI ---
 def pdf_text(metin):
     if not isinstance(metin, str):
         metin = str(metin)
@@ -53,7 +46,69 @@ def pdf_text(metin):
         metin = metin.replace(tr, en)
     return metin
 
-# --- 2. OTURUM VE HAFIZA YÖNETİMİ ---
+# =========================================================
+# 3. KALICI DOSYA KAYIT VE YÜKLEME MOTORU (PERSISTENCE)
+# =========================================================
+DOSYA_STOK = "veri_stoklar.json"
+DOSYA_RECETE = "veri_receteler.json"
+DOSYA_MAMUL = "veri_mamuller.json"
+DOSYA_SEVK = "veri_sevk_log.json"
+
+def stoklari_yukle():
+    if os.path.exists(DOSYA_STOK):
+        try:
+            df = pd.read_json(DOSYA_STOK)
+            if not df.empty:
+                df["Stok Kod"] = df["Stok Kod"].astype(str).str.strip()
+                df["Depo Miktar"] = df["Depo Miktar"].apply(sayiya_cevir)
+                return df
+        except:
+            pass
+    return pd.DataFrame([
+        {"Stok Kod": "1.ATD.20.46.Ç", "Stok Adı": "ATD ÜÇ NOKTA ASKI KOMPLE", "Depo Miktar": 15.0, "Birim": "ADET"},
+        {"Stok Kod": "1.AGB.100.04.000.0", "Stok Adı": "AGB DİNGİL PİSTONU KOMPLE", "Depo Miktar": 8.0, "Birim": "ADET"},
+        {"Stok Kod": "2.ATD.000.01.000.0", "Stok Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Depo Miktar": 2.0, "Birim": "ADET"},
+        {"Stok Kod": "7.1.3.1001", "Stok Adı": "LAMA 40 X 10 HAMMADDE", "Depo Miktar": 50.0, "Birim": "METRE"},
+        {"Stok Kod": "7.1.7.1076", "Stok Adı": "BORU DİKİŞLİ Ø88,9(3'')x2", "Depo Miktar": 100.0, "Birim": "METRE"}
+    ])
+
+def receteleri_yukle():
+    if os.path.exists(DOSYA_RECETE):
+        try:
+            df = pd.read_json(DOSYA_RECETE)
+            if not df.empty:
+                for col in ["Mamul", "Ust_Kod", "Malzeme Kodu"]:
+                    df[col] = df[col].astype(str).str.strip()
+                df["Miktar"] = df["Miktar"].apply(sayiya_cevir)
+                return df
+        except:
+            pass
+    return pd.DataFrame([
+        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "1.ATD.20.46.Ç", "Malzeme Kodu": "2.ATD.000.01.000.0", "Malzeme Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Miktar": 1.0, "Seviye": 1, "Path": "1.ATD...>2.ATD..."},
+        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.3.1001", "Malzeme Adı": "LAMA 40 X 10 HAMMADDE", "Miktar": 4.0, "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.3..."},
+        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.7.1076", "Malzeme Adı": "BORU DİKİŞLİ Ø88,9(3'')x2", "Miktar": 0.164, "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.7..."}
+    ])
+
+def mamulleri_yukle():
+    if os.path.exists(DOSYA_MAMUL):
+        try:
+            return pd.read_json(DOSYA_MAMUL)
+        except:
+            pass
+    return pd.DataFrame(columns=["Tarih", "Mamul Kod", "Mamul Adı", "Üretilen Adet", "Durum"])
+
+def sevk_log_yukle():
+    if os.path.exists(DOSYA_SEVK):
+        try:
+            return pd.read_json(DOSYA_SEVK)
+        except:
+            pass
+    return pd.DataFrame(columns=["Tarih", "Evrak No", "Firma", "Araç Plaka", "Mamül Kodu", "Sevk Adedi"])
+
+def veri_kaydet(df, dosya_adi):
+    df.to_json(dosya_adi, orient="records", force_ascii=False)
+
+# --- 4. OTURUM VE HAFIZA YÖNETİMİ ---
 if "giriş_yapildi" not in st.session_state:
     st.session_state["giriş_yapildi"] = False
 
@@ -71,32 +126,17 @@ if not st.session_state["giriş_yapildi"]:
             st.error("❌ Hatalı Kullanıcı Adı veya Şifre!")
     st.stop()
 
-# --- HAFIZADAKİ TABLOLAR ---
+# --- TABLOLARI DOSYADAN YÜKLE ---
 if "stok_df" not in st.session_state:
-    st.session_state["stok_df"] = pd.DataFrame([
-        {"Stok Kod": "1.ATD.20.46.Ç", "Stok Adı": "ATD ÜÇ NOKTA ASKI KOMPLE", "Depo Miktar": 15.0, "Birim": "ADET"},
-        {"Stok Kod": "1.AGB.100.04.000.0", "Stok Adı": "AGB DİNGİL PİSTONU KOMPLE", "Depo Miktar": 8.0, "Birim": "ADET"},
-        {"Stok Kod": "2.ATD.000.01.000.0", "Stok Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Depo Miktar": 2.0, "Birim": "ADET"},
-        {"Stok Kod": "7.1.3.1001", "Stok Adı": "LAMA 40 X 10 HAMMADDE", "Depo Miktar": 50.0, "Birim": "METRE"},
-        {"Stok Kod": "7.1.7.1076", "Stok Adı": "BORU DİKİŞLİ Ø88,9(3'')x2", "Depo Miktar": 100.0, "Birim": "METRE"}
-    ])
-
+    st.session_state["stok_df"] = stoklari_yukle()
 if "recete_df" not in st.session_state:
-    st.session_state["recete_df"] = pd.DataFrame([
-        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "1.ATD.20.46.Ç", "Malzeme Kodu": "2.ATD.000.01.000.0", "Malzeme Adı": "ATD ÜÇ NOKTA ASKI YEDEK PARÇA", "Miktar": "1", "Seviye": 1, "Path": "1.ATD...>2.ATD..."},
-        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.3.1001", "Malzeme Adı": "LAMA 40 X 10 HAMMADDE", "Miktar": "4", "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.3..."},
-        {"Mamul": "1.ATD.20.46.Ç", "Ust_Kod": "2.ATD.000.01.000.0", "Malzeme Kodu": "7.1.7.1076", "Malzeme Adı": "BORU DİKİŞLİ Ø88,9(3'')x2", "Miktar": "0,164", "Seviye": 2, "Path": "1.ATD...>2.ATD...>7.1.7..."}
-    ])
-
+    st.session_state["recete_df"] = receteleri_yukle()
 if "mamuller_df" not in st.session_state:
-    st.session_state["mamuller_df"] = pd.DataFrame(columns=["Tarih", "Mamul Kod", "Mamul Adı", "Üretilen Adet", "Durum"])
-
+    st.session_state["mamuller_df"] = mamulleri_yukle()
 if "eksik_df" not in st.session_state:
     st.session_state["eksik_df"] = pd.DataFrame(columns=["Tarih", "Ana Mamül", "Eksik Malzeme Kodu", "Malzeme Adı", "Eksik Miktar", "Darboğaz PATH / Yolu"])
-
 if "sevk_log_df" not in st.session_state:
-    st.session_state["sevk_log_df"] = pd.DataFrame(columns=["Tarih", "Evrak No", "Firma", "Araç Plaka", "Mamül Kodu", "Sevk Adedi"])
-
+    st.session_state["sevk_log_df"] = sevk_log_yukle()
 if "irsaliye_sepeti" not in st.session_state:
     st.session_state["irsaliye_sepeti"] = []
 
@@ -106,8 +146,6 @@ def uretimi_simule_et(mamul_kod, parent_kod, miktar, seviye, islem_kaynagi, ust_
     for _, row in children.iterrows():
         child_kod = str(row["Malzeme Kodu"]).strip()
         child_ad = str(row["Malzeme Adı"]).strip()
-        
-        # VİRGÜL HATASINI ÇÖZEN NOKTA: sayiya_cevir fonksiyonu kullanıldı
         birim_miktar = sayiya_cevir(row["Miktar"])
         path_bilgisi = str(row["Path"]).strip()
         
@@ -161,38 +199,21 @@ def uretimi_simule_et(mamul_kod, parent_kod, miktar, seviye, islem_kaynagi, ust_
 # --- RESMİ SEVK İRSALİYESİ (A4 PDF) OLUŞTURUCU ---
 def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, kalemler):
     pdf_yolu = f"/tmp/Sevk_Irsaliyesi_{evrak_no}.pdf"
-    doc = SimpleDocTemplate(
-        pdf_yolu, pagesize=A4,
-        leftMargin=35, rightMargin=35, topMargin=35, bottomMargin=35
-    )
-    
+    doc = SimpleDocTemplate(pdf_yolu, pagesize=A4, leftMargin=35, rightMargin=35, topMargin=35, bottomMargin=35)
     styles = getSampleStyleSheet()
     style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor("#1A365D"), alignment=TA_CENTER, spaceAfter=15)
     style_normal = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=13)
     style_bold = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=13)
     
     story = []
-    
     story.append(Paragraph(pdf_text("AGB HIDROLIK & MAKINA SAN. TIC. A.S."), style_title))
     story.append(Paragraph(pdf_text(f"SEVK IRSALIYESI - No: {evrak_no}"), style_title))
     story.append(Spacer(1, 10))
     
-    satici_txt = (
-        f"<b>DÜZENLEYEN (SATICICI):</b><br/>"
-        f"{pdf_text(satici_bilgi['unvan'])}<br/>"
-        f"Adres: {pdf_text(satici_bilgi['adres'])}<br/>"
-        f"V.D. / No: {pdf_text(satici_bilgi['vd'])}"
-    )
-    alici_txt = (
-        f"<b>ALICI (MÜŞTERİ):</b><br/>"
-        f"{pdf_text(alici_bilgi['unvan'])}<br/>"
-        f"Adres: {pdf_text(alici_bilgi['adres'])}<br/>"
-        f"V.D. / No: {pdf_text(alici_bilgi['vd'])}"
-    )
+    satici_txt = f"<b>DÜZENLEYEN (SATICICI):</b><br/>{pdf_text(satici_bilgi['unvan'])}<br/>Adres: {pdf_text(satici_bilgi['adres'])}<br/>V.D. / No: {pdf_text(satici_bilgi['vd'])}"
+    alici_txt = f"<b>ALICI (MÜŞTERİ):</b><br/>{pdf_text(alici_bilgi['unvan'])}<br/>Adres: {pdf_text(alici_bilgi['adres'])}<br/>V.D. / No: {pdf_text(alici_bilgi['vd'])}"
     
-    t_fatura = Table([
-        [Paragraph(satici_txt, style_normal), Paragraph(alici_txt, style_normal)]
-    ], colWidths=[260, 260])
+    t_fatura = Table([[Paragraph(satici_txt, style_normal), Paragraph(alici_txt, style_normal)]], colWidths=[260, 260])
     t_fatura.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#A0AEC0")),
         ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
@@ -205,12 +226,7 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     story.append(t_fatura)
     story.append(Spacer(1, 12))
     
-    detay_txt = (
-        f"<b>Düzenleme Tarihi:</b> {sevk_detay['duzenleme_tarih']}   |   "
-        f"<b>Fiili Sevk Tarihi & Saati:</b> {sevk_detay['fiili_sevk']}   |   "
-        f"<b>Araç Plakası:</b> {pdf_text(sevk_detay['plaka'])}   |   "
-        f"<b>Şoför:</b> {pdf_text(sevk_detay['sofor'])}"
-    )
+    detay_txt = f"<b>Düzenleme Tarihi:</b> {sevk_detay['duzenleme_tarih']}   |   <b>Fiili Sevk Tarihi & Saati:</b> {sevk_detay['fiili_sevk']}   |   <b>Araç Plakası:</b> {pdf_text(sevk_detay['plaka'])}   |   <b>Şoför:</b> {pdf_text(sevk_detay['sofor'])}"
     t_detay = Table([[Paragraph(detay_txt, style_normal)]], colWidths=[520])
     t_detay.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
@@ -222,24 +238,9 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     story.append(t_detay)
     story.append(Spacer(1, 15))
     
-    tablo_veri = [
-        [
-            Paragraph("<b>Sıra</b>", style_bold),
-            Paragraph("<b>Stok / Malzeme Kodu</b>", style_bold),
-            Paragraph("<b>Malın Cinsi / Açıklaması</b>", style_bold),
-            Paragraph("<b>Miktar</b>", style_bold),
-            Paragraph("<b>Birim</b>", style_bold)
-        ]
-    ]
-    
+    tablo_veri = [[Paragraph("<b>Sıra</b>", style_bold), Paragraph("<b>Stok / Malzeme Kodu</b>", style_bold), Paragraph("<b>Malın Cinsi / Açıklaması</b>", style_bold), Paragraph("<b>Miktar</b>", style_bold), Paragraph("<b>Birim</b>", style_bold)]]
     for i, item in enumerate(kalemler, start=1):
-        tablo_veri.append([
-            Paragraph(str(i), style_normal),
-            Paragraph(pdf_text(item["kod"]), style_normal),
-            Paragraph(pdf_text(item["ad"]), style_normal),
-            Paragraph(str(item["miktar"]), style_normal),
-            Paragraph(pdf_text(item["birim"]), style_normal)
-        ])
+        tablo_veri.append([Paragraph(str(i), style_normal), Paragraph(pdf_text(item["kod"]), style_normal), Paragraph(pdf_text(item["ad"]), style_normal), Paragraph(str(item["miktar"]), style_normal), Paragraph(pdf_text(item["birim"]), style_normal)])
         
     t_urunler = Table(tablo_veri, colWidths=[35, 120, 235, 65, 65])
     t_urunler.setStyle(TableStyle([
@@ -255,28 +256,17 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     story.append(t_urunler)
     story.append(Spacer(1, 25))
     
-    yasal_not = (
-        "<i>İşbu sevk irsaliyesi muhteviyatı mallar yukarıda belirtilen miktar ve "
-        "niteliklere uygun olarak eksiksiz ve hasarsız bir şekilde teslim edilmiştir/alınmıştır.</i>"
-    )
+    yasal_not = "<i>İşbu sevk irsaliyesi muhteviyatı mallar yukarıda belirtilen miktar ve niteliklere uygun olarak eksiksiz ve hasarsız bir şekilde teslim edilmiştir/alınmıştır.</i>"
     story.append(Paragraph(pdf_text(yasal_not), style_normal))
     story.append(Spacer(1, 15))
     
-    imza_tablo = Table([
-        [
-            Paragraph("<b>TESLİM EDEN (SEVK EDEN)</b><br/><br/>İmza / Kaşe:<br/><br/>........................................", style_normal),
-            Paragraph("<b>TAŞIYICI / ŞOFÖR</b><br/><br/>İmza:<br/><br/>........................................", style_normal),
-            Paragraph("<b>TESLİM ALAN (MÜŞTERİ)</b><br/><br/>İmza / Kaşe:<br/><br/>........................................", style_normal)
-        ]
-    ], colWidths=[173, 173, 174])
-    
-    imza_tablo.setStyle(TableStyle([
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER')
-    ]))
+    imza_tablo = Table([[
+        Paragraph("<b>TESLİM EDEN (SEVK EDEN)</b><br/><br/>İmza / Kaşe:<br/><br/>........................................", style_normal),
+        Paragraph("<b>TAŞIYICI / ŞOFÖR</b><br/><br/>İmza:<br/><br/>........................................", style_normal),
+        Paragraph("<b>TESLİM ALAN (MÜŞTERİ)</b><br/><br/>İmza / Kaşe:<br/><br/>........................................", style_normal)
+    ]], colWidths=[173, 173, 174])
+    imza_tablo.setStyle(TableStyle([('TOPPADDING', (0,0), (-1,-1), 10), ('VALIGN', (0,0), (-1,-1), 'TOP'), ('ALIGN', (0,0), (-1,-1), 'CENTER')]))
     story.append(KeepTogether(imza_tablo))
-    
     doc.build(story)
     return pdf_yolu
 
@@ -286,17 +276,9 @@ def mail_gonder(alici_mail, evrak_no, firma, pdf_yolu, smtp_user, smtp_pass):
     msg["Subject"] = f"AGB Hidrolik - Sevk İrsaliyesi ({evrak_no})"
     msg["From"] = smtp_user
     msg["To"] = alici_mail
-    msg.set_content(
-        f"Sayın {firma} Yetkilisi,\n\n"
-        f"{evrak_no} seri numaralı sevk irsaliyemize ait resmi evrak ekte PDF olarak sunulmuştur.\n\n"
-        f"Malların eksiksiz teslim alınmasını rica eder, iyi çalışmalar dileriz.\n"
-        f"AGB Hidrolik ve Makina San. Tic. A.Ş."
-    )
-    
+    msg.set_content(f"Sayın {firma} Yetkilisi,\n\n{evrak_no} seri numaralı sevk irsaliyemize ait resmi evrak ekte PDF olarak sunulmuştur.\n\nMalların eksiksiz teslim alınmasını rica eder, iyi çalışmalar dileriz.\nAGB Hidrolik ve Makina San. Tic. A.Ş.")
     with open(pdf_yolu, "rb") as f:
-        pdf_data = f.read()
-    msg.add_attachment(pdf_data, maintype="application", subtype="pdf", filename=f"Sevk_Irsaliyesi_{evrak_no}.pdf")
-    
+        msg.add_attachment(f.read(), maintype="application", subtype="pdf", filename=f"Sevk_Irsaliyesi_{evrak_no}.pdf")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(smtp_user, smtp_pass)
         smtp.send_message(msg)
@@ -332,7 +314,6 @@ if menu == "📊 Dashboard & Simülasyon":
         hedef_adet = st.number_input("Hedef Adet", min_value=1.0, value=5.0, step=1.0)
         
     if st.button("▶ SİMÜLASYONU BAŞLAT VE REÇETEYİ PATLAT", type="primary", use_container_width=True):
-        # Stokları da sayiya_cevir ile güvene aldık
         stok_dict = {row["Stok Kod"]: sayiya_cevir(row["Depo Miktar"]) for _, row in st.session_state["stok_df"].iterrows()}
         ad_dict = dict(zip(st.session_state["stok_df"]["Stok Kod"], st.session_state["stok_df"]["Stok Adı"]))
         
@@ -363,6 +344,9 @@ if menu == "📊 Dashboard & Simülasyon":
                 if kod in test_stok_dict:
                     st.session_state["stok_df"].at[i, "Depo Miktar"] = test_stok_dict[kod]
             
+            # Üretim sonrası stokları kalıcı olarak dosyaya kaydet
+            veri_kaydet(st.session_state["stok_df"], DOSYA_STOK)
+            
             yeni_mamul = pd.DataFrame([{
                 "Tarih": datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
                 "Mamul Kod": mamul_kod,
@@ -371,30 +355,41 @@ if menu == "📊 Dashboard & Simülasyon":
                 "Durum": "Üretildi (Tamamlandı)"
             }])
             st.session_state["mamuller_df"] = pd.concat([st.session_state["mamuller_df"], yeni_mamul], ignore_index=True)
-            st.session_state["eksik_df"] = pd.DataFrame(columns=["Tarih", "Ana Mamül", "Eksik Malzeme Kodu", "Malzeme Adı", "Eksik Miktar", "Darboğaz PATH / Yolu"])
+            veri_kaydet(st.session_state["mamuller_df"], DOSYA_MAMUL)
             
-            st.success("✅ BAŞARILI: Hiçbir darboğazla karşılaşılmadı! Stoklar düşüldü ve MAMÜLLER sayfasına loglandı.")
+            st.session_state["eksik_df"] = pd.DataFrame(columns=["Tarih", "Ana Mamül", "Eksik Malzeme Kodu", "Malzeme Adı", "Eksik Miktar", "Darboğaz PATH / Yolu"])
+            st.success("✅ BAŞARILI: Hiçbir darboğazla karşılaşılmadı! Stoklar kalıcı olarak düşüldü ve dosyaya kaydedildi.")
             st.dataframe(pd.DataFrame(log_rows), use_container_width=True)
 
 # =========================================================
-# 2. STOKLAR
+# 2. STOKLAR (ELLE MANUEL KONTROL & KALICI DOSYA KAYDI)
 # =========================================================
 elif menu == "📦 Stoklar (Manuel Kontrol)":
     st.title("📦 Mevcut Stok Yönetimi")
-    guncel_stok = st.data_editor(st.session_state["stok_df"], num_rows="dynamic", use_container_width=True)
+    st.info("💡 Tablodaki hücrelere çift tıklayarak stokları manuel güncelleyebilirsiniz.")
+    guncel_stok = st.data_editor(st.session_state["stok_df"], num_rows="dynamic", use_container_width=True, key="editor_stok")
     if st.button("💾 Değişiklikleri Kaydet", type="primary"):
+        guncel_stok["Depo Miktar"] = guncel_stok["Depo Miktar"].apply(sayiya_cevir)
+        guncel_stok["Stok Kod"] = guncel_stok["Stok Kod"].astype(str).str.strip()
         st.session_state["stok_df"] = guncel_stok
-        st.success("✅ Stoklar güncellendi!")
+        veri_kaydet(guncel_stok, DOSYA_STOK)
+        st.success("✅ Stoklar güncellendi ve kalıcı dosyaya kaydedildi!")
+        st.rerun()
 
 # =========================================================
-# 3. REÇETELER
+# 3. REÇETELER (KALICI DOSYA KAYDI)
 # =========================================================
 elif menu == "📑 Reçeteler (BOM)":
     st.title("📑 Üretim Reçeteleri (BOM Listesi)")
-    guncel_recete = st.data_editor(st.session_state["recete_df"], num_rows="dynamic", use_container_width=True)
+    guncel_recete = st.data_editor(st.session_state["recete_df"], num_rows="dynamic", use_container_width=True, key="editor_recete")
     if st.button("💾 Reçeteyi Kaydet", type="primary"):
+        guncel_recete["Miktar"] = guncel_recete["Miktar"].apply(sayiya_cevir)
+        for col in ["Mamul", "Ust_Kod", "Malzeme Kodu"]:
+            guncel_recete[col] = guncel_recete[col].astype(str).str.strip()
         st.session_state["recete_df"] = guncel_recete
-        st.success("✅ Reçete listesi güncellendi!")
+        veri_kaydet(guncel_recete, DOSYA_RECETE)
+        st.success("✅ Reçete listesi güncellendi ve kalıcı dosyaya yazıldı!")
+        st.rerun()
 
 # =========================================================
 # 4. MAMÜLLER
@@ -513,6 +508,10 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
                 }])
                 st.session_state["sevk_log_df"] = pd.concat([st.session_state["sevk_log_df"], yeni_log], ignore_index=True)
 
+            # Sevkiyat sonrası düşülen stokları ve geçmişi kalıcı olarak dosyaya kaydet
+            veri_kaydet(st.session_state["stok_df"], DOSYA_STOK)
+            veri_kaydet(st.session_state["sevk_log_df"], DOSYA_SEVK)
+
             satici_info = {"unvan": s_unvan, "adres": s_adres, "vd": s_vd}
             alici_info = {"unvan": a_unvan, "adres": a_adres, "vd": a_vd}
             detay_info = {
@@ -532,7 +531,7 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
                 except Exception as e:
                     mail_msg = f" ⚠️ PDF oluştu ancak E-Posta gönderilemedi: {e}"
 
-            st.success(f"✅ {evrak_no} irsaliyesi başarıyla kesildi ve tüm ürünler depodan düşüldü!{mail_msg}")
+            st.success(f"✅ {evrak_no} irsaliyesi başarıyla kesildi, stoklardan düşüldü ve kalıcı dosyaya kaydedildi!{mail_msg}")
             
             with open(pdf_yolu, "rb") as f:
                 st.download_button(
