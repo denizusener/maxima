@@ -113,12 +113,12 @@ if "giriş_yapildi" not in st.session_state:
     st.session_state["giriş_yapildi"] = False
 
 if not st.session_state["giriş_yapildi"]:
-    st.markdown("## 🔒 AGB Üretim ve Sevkiyat Yönetim Sistemi")
+    st.markdown("## 🔒 MAXİMA Üretim ve Sevkiyat Yönetim Sistemi")
     kullanici = st.text_input("Kullanıcı Adı")
     sifre = st.text_input("Şifre", type="password")
     
     if st.button("Sisteme Giriş Yap", type="primary"):
-        if (kullanici == "admin" and sifre == "1234") or (kullanici == "patron" and sifre == "agb2026"):
+        if (kullanici == "admin" and sifre == "1234") or (kullanici == "enes" and sifre == "mxm2026"):
             st.session_state["giriş_yapildi"] = True
             st.session_state["kullanici"] = kullanici
             st.rerun()
