@@ -16,7 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 # --- SAYFA VE SEKME AYARLARI ---
-st.set_page_config(page_title="MAXİMA Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="AGB Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
 
 # --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ ---
 def sayiya_cevir(val):
@@ -113,12 +113,12 @@ if "giriş_yapildi" not in st.session_state:
     st.session_state["giriş_yapildi"] = False
 
 if not st.session_state["giriş_yapildi"]:
-    st.markdown("## 🔒 MAXİMA Üretim ve Sevkiyat Yönetim Sistemi")
+    st.markdown("## 🔒 AGB Üretim ve Sevkiyat Yönetim Sistemi")
     kullanici = st.text_input("Kullanıcı Adı")
     sifre = st.text_input("Şifre", type="password")
     
     if st.button("Sisteme Giriş Yap", type="primary"):
-        if (kullanici == "admin" and sifre == "1234") or (kullanici == "enes" and sifre == "mxm2026"):
+        if (kullanici == "admin" and sifre == "1234") or (kullanici == "patron" and sifre == "agb2026"):
             st.session_state["giriş_yapildi"] = True
             st.session_state["kullanici"] = kullanici
             st.rerun()
@@ -206,7 +206,7 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     style_bold = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=13)
     
     story = []
-    story.append(Paragraph(pdf_text("MAXİMA MAKİNA"), style_title))
+    story.append(Paragraph(pdf_text("AGB HIDROLIK & MAKINA SAN. TIC. A.S."), style_title))
     story.append(Paragraph(pdf_text(f"SEVK IRSALIYESI - No: {evrak_no}"), style_title))
     story.append(Spacer(1, 10))
     
@@ -273,7 +273,7 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
 # --- GERÇEK SMTP MAİL GÖNDERİCİ ---
 def mail_gonder(alici_mail, evrak_no, firma, pdf_yolu, smtp_user, smtp_pass):
     msg = EmailMessage()
-    msg["Subject"] = f"MAXİMA MAKİNE - Sevk İrsaliyesi ({evrak_no})"
+    msg["Subject"] = f"AGB Hidrolik - Sevk İrsaliyesi ({evrak_no})"
     msg["From"] = smtp_user
     msg["To"] = alici_mail
     msg.set_content(f"Sayın {firma} Yetkilisi,\n\n{evrak_no} seri numaralı sevk irsaliyemize ait resmi evrak ekte PDF olarak sunulmuştur.\n\nMalların eksiksiz teslim alınmasını rica eder, iyi çalışmalar dileriz.\nAGB Hidrolik ve Makina San. Tic. A.Ş.")
@@ -293,11 +293,11 @@ if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
 
 st.sidebar.divider()
 menu = st.sidebar.radio("📌 Menü Seçimi", [
-    "📊 Dashboard",
+    "📊 Dashboard & Simülasyon",
     "📦 Stoklar (Manuel Kontrol)",
     "📑 Reçeteler (BOM)",
     "🏭 Mamüller (Üretim Arşivi)",
-    "⚠️ Eksik Stoklar",
+    "⚠️ Eksik Stoklar (Darboğaz)",
     "🚚 Sevkiyat & İrsaliye"
 ])
 
@@ -344,7 +344,6 @@ if menu == "📊 Dashboard & Simülasyon":
                 if kod in test_stok_dict:
                     st.session_state["stok_df"].at[i, "Depo Miktar"] = test_stok_dict[kod]
             
-            # Üretim sonrası stokları kalıcı olarak dosyaya kaydet
             veri_kaydet(st.session_state["stok_df"], DOSYA_STOK)
             
             yeni_mamul = pd.DataFrame([{
@@ -362,12 +361,18 @@ if menu == "📊 Dashboard & Simülasyon":
             st.dataframe(pd.DataFrame(log_rows), use_container_width=True)
 
 # =========================================================
-# 2. STOKLAR (ELLE MANUEL KONTROL & KALICI DOSYA KAYDI)
+# 2. STOKLAR (METİN HÜCRE ZIRHI İLE GÜNCELLENDİ)
 # =========================================================
 elif menu == "📦 Stoklar (Manuel Kontrol)":
     st.title("📦 Mevcut Stok Yönetimi")
-    st.info("💡 Tablodaki hücrelere çift tıklayarak stokları manuel güncelleyebilirsiniz.")
-    guncel_stok = st.data_editor(st.session_state["stok_df"], num_rows="dynamic", use_container_width=True, key="editor_stok")
+    st.info("💡 Tablodaki hücrelere çift tıklayarak stokları manuel güncelleyebilirsiniz (Virgüllü değer girebilirsiniz).")
+    
+    # Depo Miktar sütununu metne (string) çevirerek editöre veriyoruz ki Streamlit virgülleri bozmasın
+    stok_gosterim = st.session_state["stok_df"].copy()
+    stok_gosterim["Depo Miktar"] = stok_gosterim["Depo Miktar"].astype(str)
+    
+    guncel_stok = st.data_editor(stok_gosterim, num_rows="dynamic", use_container_width=True, key="editor_stok")
+    
     if st.button("💾 Değişiklikleri Kaydet", type="primary"):
         guncel_stok["Depo Miktar"] = guncel_stok["Depo Miktar"].apply(sayiya_cevir)
         guncel_stok["Stok Kod"] = guncel_stok["Stok Kod"].astype(str).str.strip()
@@ -377,11 +382,18 @@ elif menu == "📦 Stoklar (Manuel Kontrol)":
         st.rerun()
 
 # =========================================================
-# 3. REÇETELER (KALICI DOSYA KAYDI)
+# 3. REÇETELER (METİN HÜCRE ZIRHI İLE GÜNCELLENDİ)
 # =========================================================
 elif menu == "📑 Reçeteler (BOM)":
     st.title("📑 Üretim Reçeteleri (BOM Listesi)")
-    guncel_recete = st.data_editor(st.session_state["recete_df"], num_rows="dynamic", use_container_width=True, key="editor_recete")
+    st.info("💡 Miktar sütununa '0,164' veya '0,396' gibi virgüllü değerleri rahatça yazabilirsiniz.")
+    
+    # Miktar sütununu metne (string) çeviriyoruz ki virgüller silinmesin
+    recete_gosterim = st.session_state["recete_df"].copy()
+    recete_gosterim["Miktar"] = recete_gosterim["Miktar"].astype(str)
+    
+    guncel_recete = st.data_editor(recete_gosterim, num_rows="dynamic", use_container_width=True, key="editor_recete")
+    
     if st.button("💾 Reçeteyi Kaydet", type="primary"):
         guncel_recete["Miktar"] = guncel_recete["Miktar"].apply(sayiya_cevir)
         for col in ["Mamul", "Ust_Kod", "Malzeme Kodu"]:
@@ -419,28 +431,28 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🏢 Düzenleyen (Bizim Firma)")
-        s_unvan = st.text_input("Satıcı Ünvanı", "")
+        s_unvan = st.text_input("Satıcı Ünvanı", "AGB HİDROLİK VE MAKİNA SAN. TİC. A.Ş.")
         s_adres = st.text_area("Satıcı Adresi", "Organize Sanayi Bölgesi 2. Cadde No:14 Aydın / Türkiye", height=68)
         s_vd = st.text_input("Vergi Dairesi / No", "Aydın V.D. - 0123456789")
     with c2:
         st.subheader("🏬 Alıcı (Müşteri Firma)")
-        a_unvan = st.text_input("Alıcı Firma Ünvanı", "")
-        a_adres = st.text_area("Alıcı Sevk Adresi", "", height=68)
-        a_vd = st.text_input("Alıcı V.D. / No", "")
-        a_mail = st.text_input("Alıcı E-Posta Adresi", "")
+        a_unvan = st.text_input("Alıcı Firma Ünvanı", "ÇUKUROVA TARIM MAKİNALARI LTD. ŞTİ.")
+        a_adres = st.text_area("Alıcı Sevk Adresi", "Sanayi Sitesi 4. Blok No:89 Seyhan / Adana", height=68)
+        a_vd = st.text_input("Alıcı V.D. / No", "Seyhan V.D. - 9876543210")
+        a_mail = st.text_input("Alıcı E-Posta Adresi", "satinalma@cukurova.com")
 
     st.markdown("---")
     
     st.subheader("🚛 Taşıma & Evrak Detayları")
     c3, c4, c5, c6 = st.columns(4)
     with c3:
-        evrak_no = st.text_input("İrsaliye Seri / Sıra No", "")
+        evrak_no = st.text_input("İrsaliye Seri / Sıra No", "AGB-2026-0001")
     with c4:
         fiili_sevk = st.text_input("Fiili Sevk Tarihi & Saati", datetime.datetime.now().strftime("%d.%m.%Y - %H:30"))
     with c5:
-        plaka = st.text_input("Taşıyıcı Araç Plakası", "")
+        plaka = st.text_input("Taşıyıcı Araç Plakası", "09 AGB 456")
     with c6:
-        sofor = st.text_input("Şoför Adı Soyadı", "")
+        sofor = st.text_input("Şoför Adı Soyadı", "Ahmet Yılmaz")
 
     st.markdown("---")
     
@@ -475,7 +487,7 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
         st.markdown("---")
         
         with st.expander("📧 E-Posta SMTP Gönderici Ayarları (Gerçek Mail Atmak İçin)"):
-            smtp_user = st.text_input("Gönderici Gmail Adresi", "")
+            smtp_user = st.text_input("Gönderici Gmail Adresi", "seninmailin@gmail.com")
             smtp_pass = st.text_input("Gmail Uygulama Şifresi (App Password)", type="password")
             mail_aktif = st.checkbox("İrsaliye Onaylandığında Müşteriye E-Posta Gönder", value=False)
 
@@ -508,7 +520,6 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
                 }])
                 st.session_state["sevk_log_df"] = pd.concat([st.session_state["sevk_log_df"], yeni_log], ignore_index=True)
 
-            # Sevkiyat sonrası düşülen stokları ve geçmişi kalıcı olarak dosyaya kaydet
             veri_kaydet(st.session_state["stok_df"], DOSYA_STOK)
             veri_kaydet(st.session_state["sevk_log_df"], DOSYA_SEVK)
 
