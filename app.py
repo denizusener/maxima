@@ -16,7 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 # --- SAYFA VE SEKME AYARLARI ---
-st.set_page_config(page_title="AGB Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="MAXİMA Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
 
 # --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ ---
 def sayiya_cevir(val):
