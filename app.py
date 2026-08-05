@@ -206,12 +206,12 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
     style_bold = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=13)
     
     story = []
-    story.append(Paragraph(pdf_text("AGB HIDROLIK & MAKINA SAN. TIC. A.S."), style_title))
+    story.append(Paragraph(pdf_text("MAXİMA MAKİNE LTD"), style_title))
     story.append(Paragraph(pdf_text(f"SEVK IRSALIYESI - No: {evrak_no}"), style_title))
     story.append(Spacer(1, 10))
     
-    satici_txt = f"<b>DÜZENLEYEN (SATICICI):</b><br/>{pdf_text(satici_bilgi['unvan'])}<br/>Adres: {pdf_text(satici_bilgi['adres'])}<br/>V.D. / No: {pdf_text(satici_bilgi['vd'])}"
-    alici_txt = f"<b>ALICI (MÜŞTERİ):</b><br/>{pdf_text(alici_bilgi['unvan'])}<br/>Adres: {pdf_text(alici_bilgi['adres'])}<br/>V.D. / No: {pdf_text(alici_bilgi['vd'])}"
+    satici_txt = f"<b>DÜZENLEYEN (SATICI):</b><br/>{pdf_text(satici_bilgi['unvan'])}<br/>Adres: {pdf_text(satici_bilgi['adres'])}<br/>V.D. / No: {pdf_text(satici_bilgi['vd'])}"
+    alici_txt = f"<b>ALICI (MUSTERI):</b><br/>{pdf_text(alici_bilgi['unvan'])}<br/>Adres: {pdf_text(alici_bilgi['adres'])}<br/>V.D. / No: {pdf_text(alici_bilgi['vd'])}"
     
     t_fatura = Table([[Paragraph(satici_txt, style_normal), Paragraph(alici_txt, style_normal)]], colWidths=[260, 260])
     t_fatura.setStyle(TableStyle([
@@ -273,7 +273,7 @@ def resmi_irsaliye_pdf_olustur(evrak_no, satici_bilgi, alici_bilgi, sevk_detay, 
 # --- GERÇEK SMTP MAİL GÖNDERİCİ ---
 def mail_gonder(alici_mail, evrak_no, firma, pdf_yolu, smtp_user, smtp_pass):
     msg = EmailMessage()
-    msg["Subject"] = f"AGB Hidrolik - Sevk İrsaliyesi ({evrak_no})"
+    msg["Subject"] = f"MAXİMA MAKİNE - Sevk İrsaliyesi ({evrak_no})"
     msg["From"] = smtp_user
     msg["To"] = alici_mail
     msg.set_content(f"Sayın {firma} Yetkilisi,\n\n{evrak_no} seri numaralı sevk irsaliyemize ait resmi evrak ekte PDF olarak sunulmuştur.\n\nMalların eksiksiz teslim alınmasını rica eder, iyi çalışmalar dileriz.\nAGB Hidrolik ve Makina San. Tic. A.Ş.")
