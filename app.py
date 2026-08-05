@@ -16,7 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 # --- SAYFA VE SEKME AYARLARI ---
-st.set_page_config(page_title="AGB Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="MAXİMA Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
 
 # --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ ---
 def sayiya_cevir(val):
@@ -113,12 +113,12 @@ if "giriş_yapildi" not in st.session_state:
     st.session_state["giriş_yapildi"] = False
 
 if not st.session_state["giriş_yapildi"]:
-    st.markdown("## 🔒 AGB Üretim ve Sevkiyat Yönetim Sistemi")
+    st.markdown("## 🔒 MAXİMA Üretim ve Sevkiyat Yönetim Sistemi")
     kullanici = st.text_input("Kullanıcı Adı")
     sifre = st.text_input("Şifre", type="password")
     
     if st.button("Sisteme Giriş Yap", type="primary"):
-        if (kullanici == "admin" and sifre == "1234") or (kullanici == "patron" and sifre == "agb2026"):
+        if (kullanici == "admin" and sifre == "1234") or (kullanici == "enes" and sifre == "mxm2026"):
             st.session_state["giriş_yapildi"] = True
             st.session_state["kullanici"] = kullanici
             st.rerun()
@@ -313,7 +313,7 @@ if menu == "📊 Dashboard & Simülasyon":
     with col2:
         hedef_adet = st.number_input("Hedef Adet", min_value=1.0, value=5.0, step=1.0)
         
-    if st.button("▶ SİMÜLASYONU BAŞLAT VE REÇETEYİ PATLAT", type="primary", use_container_width=True):
+    if st.button("▶   ÜRETİM YAP  ", type="primary", use_container_width=True):
         stok_dict = {row["Stok Kod"]: sayiya_cevir(row["Depo Miktar"]) for _, row in st.session_state["stok_df"].iterrows()}
         ad_dict = dict(zip(st.session_state["stok_df"]["Stok Kod"], st.session_state["stok_df"]["Stok Adı"]))
         
@@ -431,28 +431,28 @@ elif menu == "🚚 Sevkiyat & İrsaliye":
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🏢 Düzenleyen (Bizim Firma)")
-        s_unvan = st.text_input("Satıcı Ünvanı", "AGB HİDROLİK VE MAKİNA SAN. TİC. A.Ş.")
+        s_unvan = st.text_input("Satıcı Ünvanı", "MAXİMA MAKİNA ")
         s_adres = st.text_area("Satıcı Adresi", "Organize Sanayi Bölgesi 2. Cadde No:14 Aydın / Türkiye", height=68)
         s_vd = st.text_input("Vergi Dairesi / No", "Aydın V.D. - 0123456789")
     with c2:
         st.subheader("🏬 Alıcı (Müşteri Firma)")
-        a_unvan = st.text_input("Alıcı Firma Ünvanı", "ÇUKUROVA TARIM MAKİNALARI LTD. ŞTİ.")
-        a_adres = st.text_area("Alıcı Sevk Adresi", "Sanayi Sitesi 4. Blok No:89 Seyhan / Adana", height=68)
-        a_vd = st.text_input("Alıcı V.D. / No", "Seyhan V.D. - 9876543210")
-        a_mail = st.text_input("Alıcı E-Posta Adresi", "satinalma@cukurova.com")
+        a_unvan = st.text_input("Alıcı Firma Ünvanı", "İLGİ TARIM MAKİNALARI")
+        a_adres = st.text_area("Alıcı Sevk Adresi", "AYDIN", height=68)
+        a_vd = st.text_input("Alıcı V.D. / No", "AYDIN V.D. - 9876543210")
+        a_mail = st.text_input("Alıcı E-Posta Adresi", "deniz.sener@ilgitarim.com")
 
     st.markdown("---")
     
     st.subheader("🚛 Taşıma & Evrak Detayları")
     c3, c4, c5, c6 = st.columns(4)
     with c3:
-        evrak_no = st.text_input("İrsaliye Seri / Sıra No", "AGB-2026-0001")
+        evrak_no = st.text_input("İrsaliye Seri / Sıra No", "MXM-2026-0001")
     with c4:
         fiili_sevk = st.text_input("Fiili Sevk Tarihi & Saati", datetime.datetime.now().strftime("%d.%m.%Y - %H:30"))
     with c5:
-        plaka = st.text_input("Taşıyıcı Araç Plakası", "09 AGB 456")
+        plaka = st.text_input("Taşıyıcı Araç Plakası", "09 MXM 456")
     with c6:
-        sofor = st.text_input("Şoför Adı Soyadı", "Ahmet Yılmaz")
+        sofor = st.text_input("Şoför Adı Soyadı", "ŞOFÖR ADI SOYADI")
 
     st.markdown("---")
     
