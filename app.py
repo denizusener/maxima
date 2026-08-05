@@ -16,7 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 # --- SAYFA VE SEKME AYARLARI ---
-st.set_page_config(page_title="MAXİMA Üretim & Sevkiyat Yönetim Sistemi", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="Kurumsal Üretim & Sevkiyat Portalı", page_icon="⚙️", layout="wide")
 
 # --- 1. TÜRKÇE ONDALIK VE VİRGÜL DÜZELTİCİ ---
 def sayiya_cevir(val):
@@ -108,22 +108,65 @@ def sevk_log_yukle():
 def veri_kaydet(df, dosya_adi):
     df.to_json(dosya_adi, orient="records", force_ascii=False)
 
-# --- 4. OTURUM VE HAFIZA YÖNETİMİ ---
+# =========================================================
+# 4. OTURUM, ŞİRKET SEÇİMİ VE HAFIZA YÖNETİMİ
+# =========================================================
 if "giriş_yapildi" not in st.session_state:
     st.session_state["giriş_yapildi"] = False
+if "secilen_sirket" not in st.session_state:
+    st.session_state["secilen_sirket"] = None
 
+# --- A) ŞİRKET SEÇİM EKRANI (ORTADAN İKİYE AYRILAN GİRİŞ) ---
+if st.session_state["secilen_sirket"] is None:
+    st.markdown("<h1 style='text-align: center; margin-top: 20px;'>🏢 KURUMSAL OPERASYON PORTALI</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray; font-size: 18px;'>Lütfen giriş yapmak istediğiniz firmayı seçiniz</p>", unsafe_allow_html=True)
+    st.write("---")
+    
+    col_max, col_ilgi = st.columns(2)
+    
+    with col_max:
+        st.info("### 🏭 MAXİMA MAKİNE\nÜretim takibi, BOM reçete patlatma, yürüyen bakiye simülasyonu ve fabrika operasyonları.")
+        st.write("")
+        if st.button("▶ MAXİMA PORTALINA GİRİŞ YAP", type="primary", use_container_width=True):
+            st.session_state["secilen_sirket"] = "MAXİMA MAKİNE"
+            st.rerun()
+            
+    with col_ilgi:
+        st.success("### 🚜 İLGİ TARIM MAKİNALARI\nSevkiyat yönetimi, lojistik operasyonları, depo takibi ve resmi sevk irsaliyesi düzenleme.")
+        st.write("")
+        if st.button("▶ İLGİ TARIM PORTALINA GİRİŞ YAP", type="primary", use_container_width=True):
+            st.session_state["secilen_sirket"] = "İLGİ TARIM"
+            st.rerun()
+    st.stop()
+
+# --- B) SEÇİLEN ŞİRKETE ÖZEL ŞİFRELİ GİRİŞ EKRANI ---
 if not st.session_state["giriş_yapildi"]:
-    st.markdown("## 🔒 MAXİMA Üretim ve Sevkiyat Yönetim Sistemi")
+    sirket = st.session_state["secilen_sirket"]
+    st.markdown(f"## 🔒 {sirket} - Yetkili Personel Girişi")
+    st.write("---")
+    
     kullanici = st.text_input("Kullanıcı Adı")
     sifre = st.text_input("Şifre", type="password")
     
-    if st.button("Sisteme Giriş Yap", type="primary"):
-        if (kullanici == "admin" and sifre == "1234") or (kullanici == "enes" and sifre == "mxm2026"):
-            st.session_state["giriş_yapildi"] = True
-            st.session_state["kullanici"] = kullanici
+    c_btn1, c_btn2 = st.columns([1, 2])
+    with c_btn1:
+        if st.button("⬅️ Şirket Değiştir", use_container_width=True):
+            st.session_state["secilen_sirket"] = None
             st.rerun()
-        else:
-            st.error("❌ Hatalı Kullanıcı Adı veya Şifre!")
+    with c_btn2:
+        if st.button("Sisteme Giriş Yap", type="primary", use_container_width=True):
+            # 1. MAXİMA MAKİNE KULLANICILARI
+            if sirket == "MAXİMA MAKİNE" and ((kullanici == "admin" and sifre == "1234") or (kullanici == "enes" and sifre == "mxm2026")):
+                st.session_state["giriş_yapildi"] = True
+                st.session_state["kullanici"] = kullanici
+                st.rerun()
+            # 2. İLGİ TARIM KULLANICILARI
+            elif sirket == "İLGİ TARIM" and ((kullanici == "admin" and sifre == "1234") or (kullanici == "deniz" and sifre == "ilgi2026")):
+                st.session_state["giriş_yapildi"] = True
+                st.session_state["kullanici"] = kullanici
+                st.rerun()
+            else:
+                st.error(f"❌ '{sirket}' sistemi için hatalı kullanıcı adı veya şifre girdiniz!")
     st.stop()
 
 # --- TABLOLARI DOSYADAN YÜKLE ---
@@ -284,11 +327,13 @@ def mail_gonder(alici_mail, evrak_no, firma, pdf_yolu, smtp_user, smtp_pass):
         smtp.send_message(msg)
 
 # =========================================================
-# YAN MENÜ
+# YAN MENÜ VE ŞİRKET BİLGİSİ
 # =========================================================
+st.sidebar.markdown(f"🏢 **Firma:** `{st.session_state['secilen_sirket']}`")
 st.sidebar.markdown(f"👤 **Giriş Yapan:** `{st.session_state['kullanici'].upper()}`")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
     st.session_state["giriş_yapildi"] = False
+    st.session_state["secilen_sirket"] = None
     st.rerun()
 
 st.sidebar.divider()
@@ -305,7 +350,7 @@ menu = st.sidebar.radio("📌 Menü Seçimi", [
 # 1. DASHBOARD & SİMÜLASYON
 # =========================================================
 if menu == "📊 Dashboard & Simülasyon":
-    st.title("📊 Çok Seviyeli Üretim Simülasyonu & Yürüyen Bakiye")
+    st.title(f"📊 {st.session_state['secilen_sirket']} - Üretim Simülasyonu & Yürüyen Bakiye")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -361,13 +406,12 @@ if menu == "📊 Dashboard & Simülasyon":
             st.dataframe(pd.DataFrame(log_rows), use_container_width=True)
 
 # =========================================================
-# 2. STOKLAR (METİN HÜCRE ZIRHI İLE GÜNCELLENDİ)
+# 2. STOKLAR
 # =========================================================
 elif menu == "📦 Stoklar (Manuel Kontrol)":
-    st.title("📦 Mevcut Stok Yönetimi")
+    st.title(f"📦 {st.session_state['secilen_sirket']} - Mevcut Stok Yönetimi")
     st.info("💡 Tablodaki hücrelere çift tıklayarak stokları manuel güncelleyebilirsiniz (Virgüllü değer girebilirsiniz).")
     
-    # Depo Miktar sütununu metne (string) çevirerek editöre veriyoruz ki Streamlit virgülleri bozmasın
     stok_gosterim = st.session_state["stok_df"].copy()
     stok_gosterim["Depo Miktar"] = stok_gosterim["Depo Miktar"].astype(str)
     
@@ -382,13 +426,12 @@ elif menu == "📦 Stoklar (Manuel Kontrol)":
         st.rerun()
 
 # =========================================================
-# 3. REÇETELER (METİN HÜCRE ZIRHI İLE GÜNCELLENDİ)
+# 3. REÇETELER
 # =========================================================
 elif menu == "📑 Reçeteler (BOM)":
-    st.title("📑 Üretim Reçeteleri (BOM Listesi)")
+    st.title(f"📑 {st.session_state['secilen_sirket']} - Üretim Reçeteleri (BOM Listesi)")
     st.info("💡 Miktar sütununa '0,164' veya '0,396' gibi virgüllü değerleri rahatça yazabilirsiniz.")
     
-    # Miktar sütununu metne (string) çeviriyoruz ki virgüller silinmesin
     recete_gosterim = st.session_state["recete_df"].copy()
     recete_gosterim["Miktar"] = recete_gosterim["Miktar"].astype(str)
     
@@ -422,16 +465,16 @@ elif menu == "⚠️ Eksik Stoklar (Darboğaz)":
         st.dataframe(st.session_state["eksik_df"], use_container_width=True)
 
 # =========================================================
-# 6. RESMİ SEVK İRSALİYESİ & ÇOKLU SEVKİYAT SEPETİ
+# 6. RESMİ SEVK İRSALİYESİ
 # =========================================================
 elif menu == "🚚 Sevkiyat & İrsaliye":
-    st.title("🚚 Resmi Sevk İrsaliyesi Düzenleme & Lojistik")
+    st.title(f"🚚 {st.session_state['secilen_sirket']} - Resmi Sevk İrsaliyesi Düzenleme & Lojistik")
     st.markdown("---")
     
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("🏢 Düzenleyen (Bizim Firma)")
-        s_unvan = st.text_input("Satıcı Ünvanı", "MAXİMA MAKİNA ")
+        s_unvan = st.text_input("Satıcı Ünvanı", "MAXİMA MAKİNA LTD.")
         s_adres = st.text_area("Satıcı Adresi", "Organize Sanayi Bölgesi 2. Cadde No:14 Aydın / Türkiye", height=68)
         s_vd = st.text_input("Vergi Dairesi / No", "Aydın V.D. - 0123456789")
     with c2:
