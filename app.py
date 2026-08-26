@@ -197,15 +197,56 @@ else: # İLGİ TARIM
 # İLGİ TARIM BÖLÜMLERİ
 # =========================================================
 
-# --- 1. SABİT REÇETELER ---
-if menu == "📑 Sabit Reçeteler (BOM)":
-    st.title("📑 Sabit Üretim Reçeteleri")
-    guncel_recete = st.data_editor(st.session_state["recete_df"], num_rows="dynamic", use_container_width=True)
-    if st.button("💾 Kaydet", type="primary"):
-        st.session_state["recete_df"] = guncel_recete
-        veri_kaydet(guncel_recete, DOSYA_RECETE)
-        st.success("Reçete kaydedildi!")
-        st.rerun()
+# --- 1. DOSYAYI SADECE 1 KERE OKUMAK İÇİN CACHE EKLİYORUZ ---
+@st.cache_data
+def buyuk_recete_excel_yukle():
+    try:
+        # 500.000 satırlık Excel dosyanızın yolunu buraya yazın
+        # Örneğin: df = pd.read_excel("ilgi_tarim_receteler.xlsx")
+        
+        # Şimdilik örnek veri döndürüyoruz (Siz read_excel yapacaksınız)
+        df = pd.DataFrame(columns=["Ana Mamül", "Malzeme Kodu", "Malzeme Adı", "Miktar"])
+        return df
+    except:
+        return pd.DataFrame()
+
+# --- 2. İLGİ TARIM REÇETELER MODÜLÜ ARKA PLANI ---
+elif menu in ["📑 Sabit Reçeteler (BOM)"]:
+    st.title("📑 İLGİ TARIM - Sabit Üretim Reçeteleri Arşivi")
+    st.write("Veritabanında **500.000+** kayıt bulunmaktadır. Sistemi yormamak için arama yapınız.")
+    
+    # Veriyi RAM'den (Cache) çağır
+    dev_recete_df = buyuk_recete_excel_yukle()
+    
+    st.markdown("---")
+    
+    # Arama motoru yapısı
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        aranan_kelime = st.text_input("🔍 Aranacak Ana Mamül veya Malzeme Kodunu Giriniz:")
+    
+    with c2:
+        st.write("")
+        st.write("")
+        hepsini_goster = st.checkbox("Yine de ilk 1000 satırı göster")
+
+    # Arama kelimesi girildiyse filtrele ve göster
+    if aranan_kelime.strip():
+        # Hem Ana Mamül sütununda hem Malzeme Kodu sütununda arama yapar
+        filtrelenmis_df = dev_recete_df[
+            dev_recete_df["Ana Mamül"].astype(str).str.contains(aranan_kelime, case=False, na=False) |
+            dev_recete_df["Malzeme Kodu"].astype(str).str.contains(aranan_kelime, case=False, na=False)
+        ]
+        
+        st.success(f"✅ Arama sonucunda {len(filtrelenmis_df)} kayıt bulundu.")
+        st.dataframe(filtrelenmis_df, use_container_width=True)
+        
+    elif hepsini_goster:
+        st.warning("⚠️ Tarayıcı performansını korumak için sadece ilk 1000 satır gösteriliyor.")
+        st.dataframe(dev_recete_df.head(1000), use_container_width=True)
+        
+    else:
+        st.info("👆 Reçete detaylarını görmek için lütfen yukarıdaki arama kutusuna bir stok kodu yazınız.")
 
 # --- 2. YENİ: TANIMLAMALAR (PERSONEL VE OPERASYON YÖNETİMİ) ---
 elif menu == "⚙️ Tanımlamalar (Personel & Operasyon)":
