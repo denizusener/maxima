@@ -36,15 +36,19 @@ def stoklari_yukle():
     return pd.DataFrame(columns=["Stok Kodu", "Stok Adı", "Birim"])
 
 def uretim_zaman_yukle():
+    beklenen_sutunlar = ["Tarih", "Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç", "Bitiş", "Toplam Süre (Dk)", "Üretilen Adet", "Birim Süre (Dk/Adet)"]
     if os.path.exists(DOSYA_URETIM_ZAMAN):
         try: 
             df = pd.read_json(DOSYA_URETIM_ZAMAN)
-            if not df.empty:
-                if "Stok Adı" not in df.columns: df["Stok Adı"] = ""
-                if "Birim" not in df.columns: df["Birim"] = "ADET"
+            # Eğer dosya boşsa veya Modül sütunu silinmişse şablonu yeniden yükle
+            if df.empty or "Modül" not in df.columns:
+                return pd.DataFrame(columns=beklenen_sutunlar)
+            
+            if "Stok Adı" not in df.columns: df["Stok Adı"] = ""
+            if "Birim" not in df.columns: df["Birim"] = "ADET"
             return df
         except: pass
-    return pd.DataFrame(columns=["Tarih", "Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç", "Bitiş", "Toplam Süre (Dk)", "Üretilen Adet", "Birim Süre (Dk/Adet)"])
+    return pd.DataFrame(columns=beklenen_sutunlar)
 
 def personelleri_yukle():
     if os.path.exists(DOSYA_PERSONEL):
@@ -65,16 +69,20 @@ def operasyonlari_yukle():
         {"Operasyon Adı": "Gövde Montajı", "Bölüm": "Montaj"}
     ])
 
-def aktif_islemleri_yukle():
+def def aktif_islemleri_yukle():
+    beklenen_sutunlar = ["Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç"]
     if os.path.exists(DOSYA_AKTIF):
         try: 
             df = pd.read_json(DOSYA_AKTIF)
-            if not df.empty:
-                if "Stok Adı" not in df.columns: df["Stok Adı"] = ""
-                if "Birim" not in df.columns: df["Birim"] = "ADET"
+            # Eğer dosya boşsa veya Modül sütunu silinmişse şablonu yeniden yükle
+            if df.empty or "Modül" not in df.columns:
+                return pd.DataFrame(columns=beklenen_sutunlar)
+                
+            if "Stok Adı" not in df.columns: df["Stok Adı"] = ""
+            if "Birim" not in df.columns: df["Birim"] = "ADET"
             return df
         except: pass
-    return pd.DataFrame(columns=["Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç"])
+    return pd.DataFrame(columns=beklenen_sutunlar)
 
 def veri_kaydet(df, dosya_adi):
     df.to_json(dosya_adi, orient="records", force_ascii=False)
