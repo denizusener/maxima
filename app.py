@@ -69,7 +69,7 @@ def operasyonlari_yukle():
         {"Operasyon Adı": "Gövde Montajı", "Bölüm": "Montaj"}
     ])
 
-def def aktif_islemleri_yukle():
+def aktif_islemleri_yukle():
     beklenen_sutunlar = ["Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç"]
     if os.path.exists(DOSYA_AKTIF):
         try: 
