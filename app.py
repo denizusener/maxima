@@ -27,17 +27,24 @@ def stoklari_yukle():
     if os.path.exists(DOSYA_STOK):
         try:
             df = pd.read_json(DOSYA_STOK)
-            df["Stok Kod"] = df["Stok Kod"].astype(str).str.strip()
-            df["Depo Miktar"] = df["Depo Miktar"].apply(sayiya_cevir)
+            # Sütun isimlerini normalize et
+            if "Stok Kodu" not in df.columns and "Stok Kod" in df.columns:
+                df.rename(columns={"Stok Kod": "Stok Kodu"}, inplace=True)
+            df["Stok Kodu"] = df["Stok Kodu"].astype(str).str.strip()
             return df
         except: pass
-    return pd.DataFrame([{"Stok Kod": "1.ATD.20.46.Ç", "Stok Adı": "ATD ÜÇ NOKTA ASKI", "Depo Miktar": 15.0, "Birim": "ADET"}])
+    return pd.DataFrame(columns=["Stok Kodu", "Stok Adı", "Birim"])
 
 def uretim_zaman_yukle():
     if os.path.exists(DOSYA_URETIM_ZAMAN):
-        try: return pd.read_json(DOSYA_URETIM_ZAMAN)
+        try: 
+            df = pd.read_json(DOSYA_URETIM_ZAMAN)
+            if not df.empty:
+                if "Stok Adı" not in df.columns: df["Stok Adı"] = ""
+                if "Birim" not in df.columns: df["Birim"] = "ADET"
+            return df
         except: pass
-    return pd.DataFrame(columns=["Tarih", "Modül", "Operasyon", "Personel", "Stok Kodu", "Başlangıç", "Bitiş", "Toplam Süre (Dk)", "Üretilen Adet", "Birim Süre (Dk/Adet)"])
+    return pd.DataFrame(columns=["Tarih", "Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç", "Bitiş", "Toplam Süre (Dk)", "Üretilen Adet", "Birim Süre (Dk/Adet)"])
 
 def personelleri_yukle():
     if os.path.exists(DOSYA_PERSONEL):
@@ -60,9 +67,14 @@ def operasyonlari_yukle():
 
 def aktif_islemleri_yukle():
     if os.path.exists(DOSYA_AKTIF):
-        try: return pd.read_json(DOSYA_AKTIF)
+        try: 
+            df = pd.read_json(DOSYA_AKTIF)
+            if not df.empty:
+                if "Stok Adı" not in df.columns: df["Stok Adı"] = ""
+                if "Birim" not in df.columns: df["Birim"] = "ADET"
+            return df
         except: pass
-    return pd.DataFrame(columns=["Modül", "Operasyon", "Personel", "Stok Kodu", "Başlangıç"])
+    return pd.DataFrame(columns=["Modül", "Operasyon", "Personel", "Stok Kodu", "Stok Adı", "Birim", "Başlangıç"])
 
 def veri_kaydet(df, dosya_adi):
     df.to_json(dosya_adi, orient="records", force_ascii=False)
@@ -139,6 +151,7 @@ if st.session_state["secilen_sirket"] == "MAXİMA MAKİNE":
 else:
     menu = st.sidebar.radio("📌 Menü Seçimi", [
         "📊 Canlı Üretim Dashboard", 
+        "📦 Stoklar (Ürün Yönetimi)", # YENİ EKLENDİ
         "📑 Sabit Reçeteler (BOM)", 
         "⚙️ Tanımlamalar (Personel & Operasyon)",
         "⏱️ Üretim Takip (Kaynak)", 
@@ -149,6 +162,8 @@ else:
 # =========================================================
 # İLGİ TARIM BÖLÜMLERİ
 # =========================================================
+
+# --- 0. CANLI DASHBOARD ---
 if menu == "📊 Canlı Üretim Dashboard":
     st.title("📊 Sahadaki Canlı Üretim Durumu")
     col1, col2 = st.columns([4, 1])
@@ -171,21 +186,61 @@ if menu == "📊 Canlı Üretim Dashboard":
                 dakika = toplam_dk % 60
                 if saat > 0: return f"{saat} saat, {dakika} dk"
                 return f"{dakika} dk"
-            except:
-                return "Hesaplanamıyor"
+            except: return "Hesaplanamıyor"
                 
         aktif_df["Geçen Süre"] = aktif_df["Başlangıç"].apply(sure_hesapla)
         c_kay, c_mon = st.columns(2)
         with c_kay:
             st.markdown("<h3 style='color: #E65100;'>🔥 Aktif Kaynak İşlemleri</h3>", unsafe_allow_html=True)
-            kay_df = aktif_df[aktif_df["Modül"] == "Kaynak"][["Personel", "Operasyon", "Stok Kodu", "Geçen Süre"]]
+            kay_df = aktif_df[aktif_df["Modül"] == "Kaynak"][["Personel", "Operasyon", "Stok Kodu", "Stok Adı", "Geçen Süre"]]
             if kay_df.empty: st.success("Kaynak bölümünde aktif işlem yok.")
             else: st.dataframe(kay_df, hide_index=True, use_container_width=True)
         with c_mon:
             st.markdown("<h3 style='color: #0277BD;'>🔧 Aktif Montaj İşlemleri</h3>", unsafe_allow_html=True)
-            mon_df = aktif_df[aktif_df["Modül"] == "Montaj"][["Personel", "Operasyon", "Stok Kodu", "Geçen Süre"]]
+            mon_df = aktif_df[aktif_df["Modül"] == "Montaj"][["Personel", "Operasyon", "Stok Kodu", "Stok Adı", "Geçen Süre"]]
             if mon_df.empty: st.success("Montaj bölümünde aktif işlem yok.")
             else: st.dataframe(mon_df, hide_index=True, use_container_width=True)
+
+
+# --- YENİ EKLENEN: STOKLAR MODÜLÜ ---
+elif menu == "📦 Stoklar (Ürün Yönetimi)":
+    st.title("📦 İLGİ TARIM - Stok Kartları Arşivi")
+    st.write("Sistemde üretimi yapılacak ürünlerin kod, isim ve birim bilgilerini buradan yönetebilirsiniz.")
+    
+    with st.expander("📥 Yeni Stok Listesi Yükle / Güncelle (Excel veya CSV)"):
+        st.info("💡 Yükleyeceğiniz dosyada sütun isimlerinin şu şekilde olduğundan emin olun: **Stok Kodu | Stok Adı | Birim**")
+        yuklenen_dosya = st.file_uploader("Güncel Stok Dosyanızı Seçin", type=["xlsx", "xls", "csv"], key="stok_up")
+        if yuklenen_dosya is not None:
+            if st.button("💾 Stokları Sisteme Kaydet", type="primary"):
+                with st.spinner("Stoklar sisteme aktarılıyor..."):
+                    if yuklenen_dosya.name.endswith('.csv'): df_yeni = pd.read_csv(yuklenen_dosya)
+                    else: df_yeni = pd.read_excel(yuklenen_dosya)
+                    
+                    # Olası sütun ismi farklılıklarını düzelt
+                    cols = df_yeni.columns.tolist()
+                    if "Stok Kodu" not in cols and len(cols) > 0: df_yeni.rename(columns={cols[0]: "Stok Kodu"}, inplace=True)
+                    if "Stok Adı" not in cols and len(cols) > 1: df_yeni.rename(columns={cols[1]: "Stok Adı"}, inplace=True)
+                    if "Birim" not in cols and len(cols) > 2: df_yeni.rename(columns={cols[2]: "Birim"}, inplace=True)
+                    
+                    # Boş olanları temizle ve string formatına çevir
+                    df_yeni = df_yeni.dropna(subset=["Stok Kodu"])
+                    df_yeni["Stok Kodu"] = df_yeni["Stok Kodu"].astype(str).str.strip()
+                    if "Stok Adı" not in df_yeni.columns: df_yeni["Stok Adı"] = ""
+                    if "Birim" not in df_yeni.columns: df_yeni["Birim"] = "ADET"
+                    
+                    st.session_state["stok_df"] = df_yeni
+                    veri_kaydet(df_yeni, DOSYA_STOK)
+                    st.success("✅ Stok arşivi başarıyla güncellendi!")
+                    st.rerun()
+
+    st.markdown("---")
+    st.write("### Mevcut Stok Listesi (Düzenlenebilir)")
+    guncel_stok = st.data_editor(st.session_state["stok_df"], num_rows="dynamic", use_container_width=True)
+    if st.button("💾 Tablodaki Değişiklikleri Kaydet"):
+        st.session_state["stok_df"] = guncel_stok
+        veri_kaydet(guncel_stok, DOSYA_STOK)
+        st.success("Değişiklikler kaydedildi!")
+        st.rerun()
 
 
 elif menu == "📑 Sabit Reçeteler (BOM)":
@@ -246,7 +301,7 @@ elif menu == "⚙️ Tanımlamalar (Personel & Operasyon)":
             st.rerun()
 
 
-# --- 3. ÜRETİM TAKİP (ESKİ ARAYÜZ, AKILLI ÇAKIŞMA KORUMASI) ---
+# --- 3. ÜRETİM TAKİP (GÜNCELLENMİŞ STOK SEÇİMİ İLE) ---
 elif menu in ["⏱️ Üretim Takip (Kaynak)", "⏱️ Üretim Takip (Montaj)"]:
     islem_tipi = "Kaynak" if "Kaynak" in menu else "Montaj"
     st.title(f"⏱️ {islem_tipi} Üretimi & Zaman Etüdü")
@@ -268,12 +323,13 @@ elif menu in ["⏱️ Üretim Takip (Kaynak)", "⏱️ Üretim Takip (Montaj)"]:
                 k1, k2, k3, k4 = st.columns(4)
                 k1.metric("Çalışan Personel", personel)
                 k2.metric("Operasyon", row["Operasyon"])
-                k3.metric("İşlenen Ürün", row["Stok Kodu"])
+                k3.metric("İşlenen Ürün", f"{row['Stok Kodu']} - {row['Stok Adı']}")
                 k4.metric("Geçen Süre (Dk)", round(gecen_sure.total_seconds() / 60.0, 1))
                 
                 c_adet, c_btn1, c_btn2 = st.columns([2, 1, 1])
+                birim_isim = row.get("Birim", "ADET")
                 with c_adet:
-                    uretilen_adet = st.number_input(f"Üretilen Adet", min_value=1.0, value=1.0, step=1.0, key=f"adet_{personel}")
+                    uretilen_adet = st.number_input(f"Üretilen Miktar ({birim_isim})", min_value=1.0, value=1.0, step=1.0, key=f"adet_{personel}")
                 with c_btn1:
                     st.write(""); st.write("")
                     if st.button("⏹️ BİTİR VE KAYDET", key=f"bitir_{personel}", type="primary", use_container_width=True):
@@ -286,6 +342,8 @@ elif menu in ["⏱️ Üretim Takip (Kaynak)", "⏱️ Üretim Takip (Montaj)"]:
                             "Operasyon": row["Operasyon"],
                             "Personel": personel,
                             "Stok Kodu": row["Stok Kodu"],
+                            "Stok Adı": row["Stok Adı"],
+                            "Birim": row["Birim"],
                             "Başlangıç": baslama.strftime("%H:%M:%S"),
                             "Bitiş": datetime.datetime.now().strftime("%H:%M:%S"),
                             "Toplam Süre (Dk)": toplam_dk,
@@ -307,38 +365,54 @@ elif menu in ["⏱️ Üretim Takip (Kaynak)", "⏱️ Üretim Takip (Montaj)"]:
                         st.rerun()
                 st.divider()
 
-    # 2. BÖLÜM: YENİ İŞLEM BAŞLATMA EKRANI (ESKİ ARAYÜZ)
+    # 2. BÖLÜM: YENİ İŞLEM BAŞLATMA EKRANI
     st.subheader("▶️ Yeni İşlem Başlat")
     
-    # Tüm personelleri al, ama çalışan (aktif) personelleri listeden çıkart!
     tum_personeller = st.session_state["personel_df"][st.session_state["personel_df"]["Bölüm"] == islem_tipi]["Ad Soyad"].tolist()
     calisan_personeller = st.session_state["aktif_df"]["Personel"].tolist()
     musait_personeller = [p for p in tum_personeller if p not in calisan_personeller]
     
     if not musait_personeller:
-        st.info(f"Şu anda {islem_tipi} bölümündeki tüm personeller üretimde. Yeni iş başlatmak için boşta personel bulunmuyor.")
+        st.info(f"Şu anda {islem_tipi} bölümündeki tüm personeller üretimde.")
     else:
         c1, c2, c3 = st.columns(3)
         ilgili_operasyonlar = st.session_state["operasyon_df"][st.session_state["operasyon_df"]["Bölüm"] == islem_tipi]["Operasyon Adı"].tolist()
         
-        with c1: secilen_personel = st.selectbox("1. Müsait Personeli Seç", [""] + musait_personeller)
-        with c2: secilen_operasyon = st.selectbox("2. Operasyonu Seç", [""] + ilgili_operasyonlar)
-        with c3: secilen_stok = st.selectbox("3. Ürün / Stok Kodunu Seç", st.session_state["stok_df"]["Stok Kod"].unique())
+        # Stokları okunaklı formatta getirme fonksiyonu
+        stok_kodlari = st.session_state["stok_df"]["Stok Kodu"].astype(str).tolist()
+        def stok_goster(kod):
+            if kod == "": return "Seçim Yapınız..."
+            satir = st.session_state["stok_df"][st.session_state["stok_df"]["Stok Kodu"] == kod]
+            if not satir.empty:
+                ad = satir.iloc[0].get("Stok Adı", "")
+                return f"{kod} | {ad}"
+            return kod
+
+        with c1: secilen_personel = st.selectbox("1. Müsait Personel Seçimi", [""] + musait_personeller)
+        with c2: secilen_operasyon = st.selectbox("2. Operasyon Seçimi", [""] + ilgili_operasyonlar)
+        with c3: secilen_stok_kodu = st.selectbox("3. Ürün / Stok Seçimi", [""] + stok_kodlari, format_func=stok_goster)
         
         if st.button("BAŞLAT", type="primary", use_container_width=True):
-            if secilen_personel == "" or secilen_operasyon == "":
-                st.error("Lütfen Personel ve Operasyon seçimini yapınız!")
+            if secilen_personel == "" or secilen_operasyon == "" or secilen_stok_kodu == "":
+                st.error("Lütfen Personel, Operasyon ve Stok seçimlerini eksiksiz yapınız!")
             else:
+                # Seçilen stok bilgilerini çek
+                secilen_satir = st.session_state["stok_df"][st.session_state["stok_df"]["Stok Kodu"] == secilen_stok_kodu].iloc[0]
+                secilen_stok_adi = secilen_satir.get("Stok Adı", "")
+                secilen_stok_birim = secilen_satir.get("Birim", "ADET")
+                
                 yeni_aktif = pd.DataFrame([{
                     "Modül": islem_tipi,
                     "Operasyon": secilen_operasyon,
                     "Personel": secilen_personel,
-                    "Stok Kodu": secilen_stok,
+                    "Stok Kodu": secilen_stok_kodu,
+                    "Stok Adı": secilen_stok_adi,
+                    "Birim": secilen_stok_birim,
                     "Başlangıç": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }])
                 st.session_state["aktif_df"] = pd.concat([st.session_state["aktif_df"], yeni_aktif], ignore_index=True)
                 veri_kaydet(st.session_state["aktif_df"], DOSYA_AKTIF)
-                st.success("✅ İşlem başlatıldı!")
+                st.success("✅ İşlem başarıyla başlatıldı!")
                 st.rerun()
 
 
