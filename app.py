@@ -211,7 +211,8 @@ def buyuk_recete_excel_yukle():
         return pd.DataFrame()
 
 # --- 2. İLGİ TARIM REÇETELER MODÜLÜ ARKA PLANI ---
-elif menu in ["📑 Sabit Reçeteler (BOM)"]:
+if menu in ["📑 Sabit Reçeteler (BOM)"]:
+    
     st.title("📑 İLGİ TARIM - Sabit Üretim Reçeteleri Arşivi")
     st.write("Veritabanında **500.000+** kayıt bulunmaktadır. Sistemi yormamak için arama yapınız.")
     
