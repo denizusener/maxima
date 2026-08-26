@@ -197,57 +197,79 @@ else: # İLGİ TARIM
 # İLGİ TARIM BÖLÜMLERİ
 # =========================================================
 
-# --- 1. DOSYAYI SADECE 1 KERE OKUMAK İÇİN CACHE EKLİYORUZ ---
+# --- 1. DOSYAYI HIZLI OKUMAK İÇİN CACHE FONKSİYONU ---
 @st.cache_data
-def buyuk_recete_excel_yukle():
-    try:
-        # 500.000 satırlık Excel dosyanızın yolunu buraya yazın
-        # Örneğin: df = pd.read_excel("ilgi_tarim_receteler.xlsx")
-        
-        # Şimdilik örnek veri döndürüyoruz (Siz read_excel yapacaksınız)
-        df = pd.DataFrame(columns=["Ana Mamül", "Malzeme Kodu", "Malzeme Adı", "Miktar"])
-        return df
-    except:
-        return pd.DataFrame()
+def buyuk_recete_yukle():
+    # Dosya varsa oku (Hız için arka planda CSV olarak tutacağız)
+    if os.path.exists("veri_dev_receteler.csv"):
+        try:
+            return pd.read_csv("veri_dev_receteler.csv", low_memory=False)
+        except:
+            pass
+    # Yoksa boş tablo döndür
+    return pd.DataFrame(columns=["Ana Mamül", "Malzeme Kodu", "Malzeme Adı", "Miktar"])
 
-# --- 2. İLGİ TARIM REÇETELER MODÜLÜ ARKA PLANI ---
+# --- 2. İLGİ TARIM REÇETELER MODÜLÜ ---
 if menu in ["📑 Sabit Reçeteler (BOM)"]:
-    
     st.title("📑 İLGİ TARIM - Sabit Üretim Reçeteleri Arşivi")
-    st.write("Veritabanında **500.000+** kayıt bulunmaktadır. Sistemi yormamak için arama yapınız.")
+    st.write("Veritabanında yüz binlerce kayıt bulunmaktadır. Sistemi yormamak için arama yapınız.")
     
-    # Veriyi RAM'den (Cache) çağır
-    dev_recete_df = buyuk_recete_excel_yukle()
-    
+    # --- YENİ: DOSYA YÜKLEME ALANI ---
+    with st.expander("📥 Yeni Reçete Dosyası Yükle / Güncelle (Excel veya CSV)"):
+        st.info("💡 Tavsiye: 500.000 satırlık verilerde .csv formatı Excel'e göre 10 kat daha hızlı yüklenir.")
+        yuklenen_dosya = st.file_uploader("Güncel Reçete Dosyanızı Seçin", type=["xlsx", "xls", "csv"])
+        
+        if yuklenen_dosya is not None:
+            if st.button("💾 Yüklenen Dosyayı Sisteme Kaydet", type="primary"):
+                with st.spinner("Dosya işleniyor ve veritabanına yazılıyor, lütfen bekleyin (Bu işlem büyük dosyalarda 1-2 dakika sürebilir)..."):
+                    # Dosya tipine göre oku
+                    if yuklenen_dosya.name.endswith('.csv'):
+                        df_yeni = pd.read_csv(yuklenen_dosya)
+                    else:
+                        df_yeni = pd.read_excel(yuklenen_dosya)
+                    
+                    # Arka planda hızlı okunsun diye CSV olarak kalıcı kaydediyoruz
+                    df_yeni.to_csv("veri_dev_receteler.csv", index=False)
+                    
+                    # Cache'i temizle ki eski veri hafızadan silinip yenisi gelsin
+                    st.cache_data.clear()
+                    
+                    st.success("✅ Dev reçete arşivi başarıyla güncellendi!")
+                    st.rerun()
+
     st.markdown("---")
     
-    # Arama motoru yapısı
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        aranan_kelime = st.text_input("🔍 Aranacak Ana Mamül veya Malzeme Kodunu Giriniz:")
+    # Veriyi RAM'den (Cache) çağır
+    dev_recete_df = buyuk_recete_yukle()
     
-    with c2:
-        st.write("")
-        st.write("")
-        hepsini_goster = st.checkbox("Yine de ilk 1000 satırı göster")
-
-    # Arama kelimesi girildiyse filtrele ve göster
-    if aranan_kelime.strip():
-        # Hem Ana Mamül sütununda hem Malzeme Kodu sütununda arama yapar
-        filtrelenmis_df = dev_recete_df[
-            dev_recete_df["Ana Mamül"].astype(str).str.contains(aranan_kelime, case=False, na=False) |
-            dev_recete_df["Malzeme Kodu"].astype(str).str.contains(aranan_kelime, case=False, na=False)
-        ]
-        
-        st.success(f"✅ Arama sonucunda {len(filtrelenmis_df)} kayıt bulundu.")
-        st.dataframe(filtrelenmis_df, use_container_width=True)
-        
-    elif hepsini_goster:
-        st.warning("⚠️ Tarayıcı performansını korumak için sadece ilk 1000 satır gösteriliyor.")
-        st.dataframe(dev_recete_df.head(1000), use_container_width=True)
-        
+    if dev_recete_df.empty:
+        st.warning("Sistemde henüz reçete bulunmuyor. Lütfen yukarıdaki menüden Excel veya CSV dosyanızı yükleyin.")
     else:
-        st.info("👆 Reçete detaylarını görmek için lütfen yukarıdaki arama kutusuna bir stok kodu yazınız.")
+        # Arama motoru yapısı
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            aranan_kelime = st.text_input("🔍 Aranacak Ana Mamül veya Malzeme Kodunu Giriniz:")
+        
+        with c2:
+            st.write("")
+            st.write("")
+            hepsini_goster = st.checkbox("Yine de ilk 1000 satırı göster")
+
+        # Arama kelimesi girildiyse filtrele ve göster
+        if aranan_kelime.strip():
+            # Tüm tabloyu string yapıp içinde arıyoruz
+            mask = dev_recete_df.astype(str).apply(lambda x: x.str.contains(aranan_kelime, case=False, na=False)).any(axis=1)
+            filtrelenmis_df = dev_recete_df[mask]
+            
+            st.success(f"✅ Arama sonucunda {len(filtrelenmis_df)} kayıt bulundu.")
+            st.dataframe(filtrelenmis_df, use_container_width=True)
+            
+        elif hepsini_goster:
+            st.warning("⚠️ Tarayıcı performansını korumak için sadece ilk 1000 satır gösteriliyor.")
+            st.dataframe(dev_recete_df.head(1000), use_container_width=True)
+            
+        else:
+            st.info("👆 Reçete detaylarını görmek için lütfen yukarıdaki arama kutusuna bir stok kodu yazınız.")
 
 # --- 2. YENİ: TANIMLAMALAR (PERSONEL VE OPERASYON YÖNETİMİ) ---
 elif menu == "⚙️ Tanımlamalar (Personel & Operasyon)":
